@@ -42,7 +42,7 @@ Saves the best checkpoint (by validation loss) to `best_model_64.pth`.
 python evaluate.py 64
 ```
 
-Uses beam search decoding (beam size 4). Reports exact match accuracy and average Levenshtein distance. Predictions are saved to `predictions_64.tsv`.
+Uses beam search decoding (beam size 4). Reports exact match accuracy, average Levenshtein distance, and per-feature-tag accuracy breakdown. Predictions are saved to predictions_64.tsv.
 
 ## Ablation Analysis
 
