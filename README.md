@@ -23,13 +23,14 @@ Python 3.9+ and PyTorch 2.0+.
 pip install -r requirements.txt
 ```
 
-Data is fetched automatically from the SIGMORPHON 2023 repository on first run.
+
 
 ## Training
 
 ```bash
 python train.py 64
 ```
+Data is fetched automatically from the SIGMORPHON 2023 repository on first run.
 
 Saves the best checkpoint (by validation loss) to `best_model_64.pth`.
 
