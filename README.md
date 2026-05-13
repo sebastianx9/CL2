@@ -27,10 +27,12 @@ pip install -r requirements.txt
 
 ## Training
 
+Data is fetched automatically from the SIGMORPHON 2023 repository on first run.
+
 ```bash
 python train.py 64
 ```
-Data is fetched automatically from the SIGMORPHON 2023 repository on first run.
+
 
 Saves the best checkpoint (by validation loss) to `best_model_64.pth`.
 
