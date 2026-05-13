@@ -64,13 +64,3 @@ All three sizes share the same fixed hyperparameters (2 encoder/decoder layers, 
 | **64** | **250k** | **19** | **0.907** | **0.176** |
 | 32 | 84k | 29 | 0.893 | 0.216 |
 
-## File Structure
-
-```
-├── data.py               tokenisation, Dataset, DataLoader
-├── model.py              all nn.Module classes
-├── train.py              training entry point (accepts size argument)
-├── evaluate.py           evaluation entry point (accepts size argument)
-├── requirements.txt
-└── README.md
-```
