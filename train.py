@@ -1,4 +1,4 @@
-import argparse
+import sys
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
@@ -7,9 +7,30 @@ from data import get_dataloaders, VOCAB_SIZE, PAD_IDX
 from model import EncoderDecoder
 
 
+SEED       = 42
+BATCH_SIZE = 64
+N_HEADS    = 4
+N_ENC_LAYERS = 2
+N_DEC_LAYERS = 2
+DROPOUT_P  = 0.3
+LR         = 1e-3
+MAX_EPOCHS = 150
+PATIENCE   = 20
+
+_SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 64
+_DIM_CONFIGS = {
+    128: dict(input_dim=128, q_dim=32, mlp_hidden_dim=256),
+    64:  dict(input_dim=64,  q_dim=16, mlp_hidden_dim=128),
+    32:  dict(input_dim=32,  q_dim=8,  mlp_hidden_dim=64),
+}
+assert _SIZE in _DIM_CONFIGS, f"SIZE must be one of {list(_DIM_CONFIGS)}"
+INPUT_DIM      = _DIM_CONFIGS[_SIZE]['input_dim']
+Q_DIM          = _DIM_CONFIGS[_SIZE]['q_dim']
+MLP_HIDDEN_DIM = _DIM_CONFIGS[_SIZE]['mlp_hidden_dim']
+SAVE_PATH      = f'best_model_{_SIZE}.pth'
+
+
 def compute_loss(logits, tgt_ids, pad_idx=PAD_IDX):
-    # teacher forcing: given BOS t1...t_{n-1}, predict t1...tn EOS
-    # shift logits and labels by one position to align predictions with targets
     loss_fn = nn.CrossEntropyLoss(ignore_index=pad_idx)
     logits  = logits[:, :-1].reshape(-1, logits.size(-1))
     targets = tgt_ids[:, 1:].reshape(-1)
@@ -32,7 +53,7 @@ def train_epoch(model, loader, optimizer, device):
 
 
 def validate_epoch(model, loader, device):
-    # validation also uses teacher forcing, so accuracy is optimistic vs. free generation
+    # validation uses teacher forcing, so accuracy is optimistic vs. free generation
     model.eval()
     total_loss, total_correct, total_tokens = 0.0, 0, 0
     with torch.no_grad():
@@ -52,49 +73,34 @@ def validate_epoch(model, loader, device):
     return avg_loss, accuracy
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Train morphological inflection model')
-    parser.add_argument('--data_dir',       type=str,   default='.')
-    parser.add_argument('--save_path',      type=str,   default='best_model.pth')
-    parser.add_argument('--input_dim',      type=int,   default=128)
-    parser.add_argument('--q_dim',          type=int,   default=64)
-    parser.add_argument('--mlp_hidden_dim', type=int,   default=256)
-    parser.add_argument('--n_enc_layers',   type=int,   default=3)
-    parser.add_argument('--n_dec_layers',   type=int,   default=3)
-    parser.add_argument('--dropout_p',      type=float, default=0.1)
-    parser.add_argument('--lr',             type=float, default=1e-3)
-    parser.add_argument('--batch_size',     type=int,   default=64)
-    parser.add_argument('--max_epochs',     type=int,   default=150)
-    parser.add_argument('--patience',       type=int,   default=10)
-    parser.add_argument('--seed',           type=int,   default=42)
-    args = parser.parse_args()
-
-    torch.manual_seed(args.seed)
+if __name__ == '__main__':
+    torch.manual_seed(SEED)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Device: {device}")
+    print(f"Device: {device} | Model size: {_SIZE}-dim")
 
-    train_loader, dev_loader, _ = get_dataloaders(args.data_dir, args.batch_size)
+    train_loader, dev_loader, _ = get_dataloaders(batch_size=BATCH_SIZE)
 
     model = EncoderDecoder(
         vocab_size     = VOCAB_SIZE,
-        input_dim      = args.input_dim,
-        q_dim          = args.q_dim,
-        mlp_hidden_dim = args.mlp_hidden_dim,
-        n_enc_layers   = args.n_enc_layers,
-        n_dec_layers   = args.n_dec_layers,
-        dropout_p      = args.dropout_p,
+        input_dim      = INPUT_DIM,
+        q_dim          = Q_DIM,
+        n_heads        = N_HEADS,
+        mlp_hidden_dim = MLP_HIDDEN_DIM,
+        n_enc_layers   = N_ENC_LAYERS,
+        n_dec_layers   = N_DEC_LAYERS,
+        dropout_p      = DROPOUT_P,
     ).to(device)
 
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Trainable parameters: {n_params:,}")
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
     best_val_loss    = float('inf')
     patience_counter = 0
     train_losses, val_losses = [], []
 
-    for epoch in range(1, args.max_epochs + 1):
+    for epoch in range(1, MAX_EPOCHS + 1):
         train_loss        = train_epoch(model, train_loader, optimizer, device)
         val_loss, val_acc = validate_epoch(model, dev_loader, device)
 
@@ -107,11 +113,11 @@ def main():
         if val_loss < best_val_loss:
             best_val_loss    = val_loss
             patience_counter = 0
-            torch.save(model.state_dict(), args.save_path)
-            print(f"           ^ saved best model to {args.save_path}")
+            torch.save(model.state_dict(), SAVE_PATH)
+            print(f"           ^ saved best model to {SAVE_PATH}")
         else:
             patience_counter += 1
-            if patience_counter >= args.patience:
+            if patience_counter >= PATIENCE:
                 print(f"Early stopping at epoch {epoch}")
                 break
 
@@ -125,9 +131,5 @@ def main():
     plt.title('Training dynamics')
     plt.legend()
     plt.tight_layout()
-    plt.savefig('training_dynamics.png', dpi=150)
-    print("Training curve saved to training_dynamics.png")
-
-
-if __name__ == '__main__':
-    main()
+    plt.savefig(f'training_dynamics_{_SIZE}.png', dpi=150)
+    print(f"Training curve saved to training_dynamics_{_SIZE}.png")
