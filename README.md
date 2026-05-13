@@ -1,8 +1,9 @@
 # An Encoder-Decoder Transformer for Morphological Inflection
 
 CL2 Coursework | Task 1 | English (SIGMORPHON 2023)
-CourseCode:LELA60332
-StudentID:11479116
+
+- CourseCode:LELA60332
+- StudentID:11479116
 
 ## Model
 
