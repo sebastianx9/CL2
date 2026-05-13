@@ -7,7 +7,7 @@ CL2 Coursework | Task 1 | English (SIGMORPHON 2023)
 
 ## Model
 
-Our final model uses $d_{\text{model}}=64$ (250k parameters), selected via ablation over three model dimensions (see below).
+Our transformer model uses $d_{\text{model}}=64$ (250k parameters), which is selected via ablation over three model dimensions (see below).
 
 The encoder reads the concatenation of a lemma and morphological feature string; the decoder generates the inflected form autoregressively.
 
