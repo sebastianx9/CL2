@@ -5,7 +5,7 @@ from collections import defaultdict
 from data import get_dataloaders, decode_ids, VOCAB_SIZE, PAD_IDX, BOS_IDX, EOS_IDX
 from model import EncoderDecoder
 
-# --- Settings ---
+
 BEAM_SIZE  = 4
 N_HEADS    = 4
 N_ENC_LAYERS = 2
