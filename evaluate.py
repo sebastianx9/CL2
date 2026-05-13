@@ -1,11 +1,3 @@
-"""
-evaluate.py — evaluation entry point for the morphological inflection model.
-
-Usage:
-    python evaluate.py --checkpoint best_model.pth
-    python evaluate.py --checkpoint best_model.pth --split test --output predictions.tsv
-"""
-
 import argparse
 import torch
 
