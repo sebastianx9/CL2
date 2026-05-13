@@ -1,30 +1,28 @@
-import argparse
+import sys
 import torch
+from collections import defaultdict
 
 from data import get_dataloaders, decode_ids, VOCAB_SIZE, PAD_IDX, BOS_IDX, EOS_IDX
 from model import EncoderDecoder
 
+# --- Settings ---
+BEAM_SIZE  = 4
+N_HEADS    = 4
+N_ENC_LAYERS = 2
+N_DEC_LAYERS = 2
 
-def greedy_generate(model, src_ids, max_len=64, device='cpu'):
-    model.eval()
-    if src_ids.dim() == 1:
-        src_ids = src_ids.unsqueeze(0)
-    src_ids = src_ids.to(device)
-
-    with torch.no_grad():
-        encoder_output, src_padding_mask = model.encode(src_ids)
-        # start from BOS and generate one token at a time until EOS or max_len
-        tgt = torch.tensor([[BOS_IDX]], device=device)
-
-        for _ in range(max_len):
-            decoder_out = model.decode(tgt, encoder_output, src_padding_mask)
-            # take logits at the last position to predict the next token
-            next_token = model.lm_head(decoder_out)[:, -1, :].argmax(dim=-1, keepdim=True)
-            tgt = torch.cat([tgt, next_token], dim=1)
-            if next_token.item() == EOS_IDX:
-                break
-
-    return tgt.squeeze(0).tolist()
+_SIZE = int(sys.argv[1]) if len(sys.argv) > 1 else 64
+_DIM_CONFIGS = {
+    128: dict(input_dim=128, q_dim=32, mlp_hidden_dim=256),
+    64:  dict(input_dim=64,  q_dim=16, mlp_hidden_dim=128),
+    32:  dict(input_dim=32,  q_dim=8,  mlp_hidden_dim=64),
+}
+assert _SIZE in _DIM_CONFIGS, f"SIZE must be one of {list(_DIM_CONFIGS)}"
+INPUT_DIM      = _DIM_CONFIGS[_SIZE]['input_dim']
+Q_DIM          = _DIM_CONFIGS[_SIZE]['q_dim']
+MLP_HIDDEN_DIM = _DIM_CONFIGS[_SIZE]['mlp_hidden_dim']
+CHECKPOINT     = f'best_model_{_SIZE}.pth'
+OUTPUT         = f'predictions_{_SIZE}.tsv'
 
 
 def beam_search(model, src_ids, beam_size=4, max_len=64, device='cpu'):
@@ -35,7 +33,6 @@ def beam_search(model, src_ids, beam_size=4, max_len=64, device='cpu'):
 
     with torch.no_grad():
         encoder_output, src_padding_mask = model.encode(src_ids)
-        # candidates: list of (cumulative_log_prob, sequence_tensor)
         candidates = [(0.0, torch.tensor([[BOS_IDX]], device=device))]
         finished   = []
 
@@ -78,7 +75,7 @@ def edit_distance(s1, s2):
     return dp[n]
 
 
-def evaluate(model, loader, device, decode='greedy', beam_size=4):
+def evaluate(model, loader, device):
     model.eval()
     correct, total, total_ed = 0, 0, 0
     results = []
@@ -87,15 +84,11 @@ def evaluate(model, loader, device, decode='greedy', beam_size=4):
         for src_ids, tgt_ids, lemmas, feats, forms in loader:
             for i in range(len(forms)):
                 src = src_ids[i]
-                # strip padding before passing to encoder
                 src_trimmed = src[:(src != PAD_IDX).sum()]
-                if decode == 'beam':
-                    pred_ids = beam_search(model, src_trimmed, beam_size=beam_size, device=device)
-                else:
-                    pred_ids = greedy_generate(model, src_trimmed, device=device)
+                pred_ids = beam_search(model, src_trimmed, beam_size=BEAM_SIZE, device=device)
                 pred = decode_ids(pred_ids)
                 gold = forms[i]
-                ed = edit_distance(gold, pred)
+                ed  = edit_distance(gold, pred)
                 if pred == gold:
                     correct += 1
                 total    += 1
@@ -107,48 +100,32 @@ def evaluate(model, loader, device, decode='greedy', beam_size=4):
     return acc, avg_ed, results
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Evaluate morphological inflection model')
-    parser.add_argument('--checkpoint',     type=str,   required=True)
-    parser.add_argument('--split',          type=str,   default='dev', choices=['dev', 'test'])
-    parser.add_argument('--output',         type=str,   default='predictions.tsv')
-    parser.add_argument('--decode',         type=str,   default='greedy', choices=['greedy', 'beam'])
-    parser.add_argument('--beam_size',      type=int,   default=4)
-    parser.add_argument('--data_dir',       type=str,   default='.')
-    parser.add_argument('--input_dim',      type=int,   default=128)
-    parser.add_argument('--q_dim',          type=int,   default=64)
-    parser.add_argument('--mlp_hidden_dim', type=int,   default=256)
-    parser.add_argument('--n_enc_layers',   type=int,   default=3)
-    parser.add_argument('--n_dec_layers',   type=int,   default=3)
-    args = parser.parse_args()
-
+if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     model = EncoderDecoder(
         vocab_size     = VOCAB_SIZE,
-        input_dim      = args.input_dim,
-        q_dim          = args.q_dim,
-        mlp_hidden_dim = args.mlp_hidden_dim,
-        n_enc_layers   = args.n_enc_layers,
-        n_dec_layers   = args.n_dec_layers,
+        input_dim      = INPUT_DIM,
+        q_dim          = Q_DIM,
+        n_heads        = N_HEADS,
+        mlp_hidden_dim = MLP_HIDDEN_DIM,
+        n_enc_layers   = N_ENC_LAYERS,
+        n_dec_layers   = N_DEC_LAYERS,
     ).to(device)
 
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device))
-    print(f"Loaded checkpoint from {args.checkpoint}")
+    model.load_state_dict(torch.load(CHECKPOINT, map_location=device))
+    print(f"Loaded checkpoint: {CHECKPOINT}")
 
-    _, dev_loader, test_loader = get_dataloaders(args.data_dir, batch_size=1)
-    loader = dev_loader if args.split == 'dev' else test_loader
+    _, _, test_loader = get_dataloaders(batch_size=1)
 
-    acc, avg_ed, results = evaluate(model, loader, device, decode=args.decode, beam_size=args.beam_size)
-    print(f"{args.split} [{args.decode}] | exact match: {acc:.4f} | avg edit distance: {avg_ed:.4f}")
+    acc, avg_ed, results = evaluate(model, test_loader, device)
+    print(f"test | exact match: {acc:.4f} | avg edit distance: {avg_ed:.4f}")
 
-    # save predictions
-    with open(args.output, 'w', encoding='utf-8') as f:
+    with open(OUTPUT, 'w', encoding='utf-8') as f:
         for lemma, feat, gold, pred, ed in results:
             f.write(f"{lemma}\t{feat}\t{pred}\n")
-    print(f"Predictions saved to {args.output}")
+    print(f"Predictions saved to {OUTPUT}")
 
-    # print hardest cases
     errors = [(l, f, g, p, ed) for l, f, g, p, ed in results if ed > 0]
     errors.sort(key=lambda x: -x[4])
     print("\n--- Hardest cases (highest edit distance) ---")
@@ -157,6 +134,13 @@ def main():
         print(f"    gold: {gold!r}")
         print(f"    pred: {pred!r}")
 
-
-if __name__ == '__main__':
-    main()
+    print("\n--- Accuracy by feature tag ---")
+    tag_correct = defaultdict(int)
+    tag_total   = defaultdict(int)
+    for _, feat, gold, pred, _ in results:
+        tag_correct[feat] += int(gold == pred)
+        tag_total[feat]   += 1
+    for feat in sorted(tag_total, key=lambda t: -tag_total[t]):
+        n = tag_total[feat]
+        c = tag_correct[feat]
+        print(f"  {feat}: {c}/{n} = {c/n:.3f}")
