@@ -1,8 +1,6 @@
-"""
-I am using byte-level tokenisation with a +4 shift to reserve indices 0-3 for special tokens:
-    PAD=0, BOS=1, EOS=2, SEP=3
-All content bytes will occupy indices 4-259, giving a vocabulary size of 260.
-"""
+#I am using byte-level tokenisation with a +4 shift to reserve indices 0-3 for special tokens: PAD=0, BOS=1, EOS=2, SEP=3
+#All content bytes will occupy indices 4-259, giving a vocabulary size of 260.
+
 
 import urllib.request
 import os
