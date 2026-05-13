@@ -1,14 +1,3 @@
-"""
-train.py — training entry point for the morphological inflection model.
-
-Usage:
-    python train.py
-    python train.py --input_dim 256 --batch_size 32 --max_epochs 200
-    python train.py --save_path checkpoints/my_model.pth
-
-Data is downloaded automatically from SIGMORPHON 2023 on first run.
-"""
-
 import argparse
 import torch
 import torch.nn as nn
