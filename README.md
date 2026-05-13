@@ -1,10 +1,12 @@
 # An Encoder-Decoder Transformer for Morphological Inflection
 
 CL2 Coursework | Task 1 | English (SIGMORPHON 2023)
+CourseCode:LELA60332
+StudentID:11479116
 
 ## Model
 
-An encoder-decoder transformer trained on English data from the SIGMORPHON 2023 morphological inflection shared task. Our final model uses $d_{\text{model}}=64$ (250k parameters), selected via ablation over three model dimensions (see below).
+Our final model uses $d_{\text{model}}=64$ (250k parameters), selected via ablation over three model dimensions (see below).
 
 The encoder reads the concatenation of a lemma and morphological feature string; the decoder generates the inflected form autoregressively.
 
